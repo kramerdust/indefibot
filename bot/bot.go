@@ -2,6 +2,7 @@ package bot
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/go-telegram-bot-api/telegram-bot-api"
@@ -63,7 +64,37 @@ func (b *Bot) Start() {
 }
 
 func (b *Bot) handleUpdates(updates tgbotapi.UpdatesChannel) {
-	for _ = range updates {
+	for u := range updates {
+		if u.Message == nil {
+			continue
+		}
+		if u.Message.IsCommand() {
+			switch u.Message.Command() {
+			case "pronounce":
+				word := u.Message.CommandArguments()
+				expositor, err := b.expositorProvider.GetWordExpositor("en", word)
+				if err != nil {
+					msg := tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Error! %s", err))
+					msg.ReplyToMessageID = u.Message.MessageID
+					continue
+				}
+				audio, err := expositor.GetAudio()
+				msg := tgbotapi.NewAudioUpload(u.Message.Chat.ID, tgbotapi.FileReader{
+					word,
+					audio,
+					-1,
+				})
+				_, err = b.botAPI.Send(msg)
+				if err != nil {
+					log.Printf("Error while answering to user! %s\n", err)
+				}
 
+			}
+		} else {
+			msg := tgbotapi.NewMessage(u.Message.Chat.ID, "I don't undestand you!")
+			msg.ReplyToMessageID = u.Message.MessageID
+
+			b.botAPI.Send(msg)
+		}
 	}
 }
