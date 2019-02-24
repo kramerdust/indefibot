@@ -1,0 +1,5 @@
+botToken: your token
+proxyURL: 127.0.0.1:1111
+source:
+  appID: your appID
+  appKey: your appKey

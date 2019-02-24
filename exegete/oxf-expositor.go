@@ -8,6 +8,9 @@ import (
 	oxf "github.com/kramerdust/go-oxford-client/v1/client"
 )
 
+type OxfExpositorProvider struct {
+	oxfClient *oxf.Client
+}
 type OxfExpositor struct {
 	*oxf.LexicalEntry
 	client *http.Client
@@ -15,6 +18,20 @@ type OxfExpositor struct {
 
 type OxfSense struct {
 	*oxf.Sense
+}
+
+func NewOxfExpositorProvider(appID, appKey string) ExpositorProvider {
+	return &OxfExpositorProvider{
+		oxf.NewClient(appID, appKey),
+	}
+}
+
+func (oep *OxfExpositorProvider) GetWordExpositor(lang, word string) (Expositor, error) {
+	entry, err := oep.oxfClient.GetEntry(lang, word)
+	if err != nil {
+		return nil, fmt.Errorf("Getting oxford entry error: %s ", err)
+	}
+	return NewOxfExpositor(&entry.Results[0].LexicalEntries[0]), nil
 }
 
 func NewOxfExpositor(lex *oxf.LexicalEntry) Expositor {
