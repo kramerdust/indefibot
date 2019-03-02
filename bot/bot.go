@@ -15,7 +15,7 @@ import (
 type Bot struct {
 	botAPI            *tgbotapi.BotAPI
 	expositorProvider exegete.ExpositorProvider
-	userDataProvider  UserDataProvider
+	wordDataProvider  WordDataProvider
 }
 
 type Config struct {
@@ -29,15 +29,15 @@ type ExternalAPI struct {
 	AppKey string `yaml:"appKey"`
 }
 
-func NewBot(config *Config, userDataProvider UserDataProvider) (*Bot, error) {
+func NewBot(config *Config, wordDataProvider WordDataProvider) (*Bot, error) {
 	bot, err := tgbotapi.NewBotAPI(config.Token)
 	if err != nil {
 		return nil, fmt.Errorf("Error while connecting to Telegram: %s ", err)
 	}
-	return &Bot{botAPI: bot, userDataProvider: userDataProvider}, nil
+	return &Bot{botAPI: bot, wordDataProvider: wordDataProvider}, nil
 }
 
-func NewBotWithProxy(config *Config, userDataProvider UserDataProvider) (*Bot, error) {
+func NewBotWithProxy(config *Config, wordDataProvider WordDataProvider) (*Bot, error) {
 	dialer, err := proxy.SOCKS5("tcp", config.ProxyURL, nil, proxy.Direct)
 	if err != nil {
 		return nil, fmt.Errorf("Proxy error: %s ", err)
@@ -49,7 +49,7 @@ func NewBotWithProxy(config *Config, userDataProvider UserDataProvider) (*Bot, e
 	if err != nil {
 		return nil, fmt.Errorf("Error while connecting to Telegram: %s ", err)
 	}
-	return &Bot{botAPI: bot, userDataProvider: userDataProvider}, nil
+	return &Bot{botAPI: bot, wordDataProvider: wordDataProvider}, nil
 }
 
 func (b *Bot) SetExpositorProvider(provider exegete.ExpositorProvider) {
@@ -68,19 +68,20 @@ func (b *Bot) Start() {
 
 func (b *Bot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 	for u := range updates {
-
 		switch {
 		case u.Message != nil:
 			log.Println("Message")
 			word := u.Message.Text
-			expositor, err := b.expositorProvider.GetWordExpositor("en", word)
-
-			if err != nil {
-				b.replyWordNotFound(&u, word)
-				continue
+			var expositor exegete.Expositor
+			var err error
+			expositor, ok := b.wordDataProvider.GetWordExpositor(word)
+			if !ok {
+				expositor, err = b.expositorProvider.GetWordExpositor("en", word)
+				if err != nil {
+					b.replyWordNotFound(&u, word)
+					continue
+				}
 			}
-
-			b.userDataProvider.SetUserExpositor(u.Message.Chat.ID, expositor)
 
 			sp, _ := expositor.GetSpelling()
 			d := expositor.GetSenses()[0].GetDefinitions()[0]
@@ -105,6 +106,7 @@ func (b *Bot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 			}
 
 		case u.CallbackQuery != nil:
+			//u.CallbackQuery.
 			log.Println("CallbackQuery")
 		}
 	}

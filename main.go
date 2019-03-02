@@ -26,9 +26,9 @@ func main() {
 
 	var myBot *bot.Bot
 	if *proxyFlag {
-		myBot, err = bot.NewBotWithProxy(config, bot.NewUserMap())
+		myBot, err = bot.NewBotWithProxy(config, bot.NewWordMap())
 	} else {
-		myBot, err = bot.NewBot(config, bot.NewUserMap())
+		myBot, err = bot.NewBot(config, bot.NewWordMap())
 	}
 	if err != nil {
 		panic(err)
