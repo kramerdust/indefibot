@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"os"
 
 	ex "github.com/kramerdust/indefibot/exegete"
 
@@ -15,6 +17,8 @@ func main() {
 	proxyFlag := flag.Bool("proxy", false, "Use proxy")
 	flag.Parse()
 
+	log.SetOutput(os.Stdout)
+
 	config, err := loadYAMLConfig("app.yaml")
 	if err != nil {
 		panic(err)
@@ -22,9 +26,9 @@ func main() {
 
 	var myBot *bot.Bot
 	if *proxyFlag {
-		myBot, err = bot.NewBotWithProxy(config)
+		myBot, err = bot.NewBotWithProxy(config, bot.NewUserMap())
 	} else {
-		myBot, err = bot.NewBot(config)
+		myBot, err = bot.NewBot(config, bot.NewUserMap())
 	}
 	if err != nil {
 		panic(err)
