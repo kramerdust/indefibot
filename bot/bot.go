@@ -84,29 +84,37 @@ func (b *Bot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 			}
 
 			sp, _ := expositor.GetSpelling()
-			d := expositor.GetSenses()[0].GetDefinitions()[0]
+			d := expositor.GetSenses()[0].GetDefinitions()
 
 			card := Card{
 				Word:          word,
 				Transcription: sp,
-				Definition:    d,
+				Definitions:   d,
 				Page:          1,
+				Total:         len(expositor.GetSenses()),
 			}
 			t := template.Must(template.New("card").Parse(CardTemplate))
 			var out bytes.Buffer
 			t.Execute(&out, card)
 
 			msg := tgbotapi.NewMessage(u.Message.Chat.ID, out.String())
-			msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(StartButtonRow())
+			msg.ReplyMarkup = renderButtonsRow(card, word)
 			msg.ParseMode = "Markdown"
+
+			// log.Printf("%#v\n", msg.ReplyMarkup)
+			// log.Println(msg.Text)
 
 			s, err := b.botAPI.Send(msg)
 			if err != nil {
+				b.replyError(&u, err)
 				log.Println("Error in message", s, err)
 			}
 
 		case u.CallbackQuery != nil:
-			//u.CallbackQuery.
+			err := b.handleCallbackQuery(&u)
+			if err != nil {
+				b.replyError(&u, err)
+			}
 			log.Println("CallbackQuery")
 		}
 	}
@@ -117,6 +125,54 @@ func (b *Bot) replyWordNotFound(u *tgbotapi.Update, word string) {
 	msg.ReplyToMessageID = u.Message.MessageID
 	msg.ParseMode = "Markdown"
 	b.botAPI.Send(msg)
+}
+
+func (b *Bot) replyError(u *tgbotapi.Update, err error) {
+	msg := tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Some error happened! *%s*", err))
+	msg.ReplyToMessageID = u.Message.MessageID
+	msg.ParseMode = "Markdown"
+	b.botAPI.Send(msg)
+}
+
+func (b *Bot) handleCallbackQuery(u *tgbotapi.Update) error {
+	query := &ButtonData{}
+	err := query.UnmarshalJSON([]byte(u.CallbackQuery.Data))
+	if err != nil {
+		return err
+	}
+	if query.AuidoAsked {
+		return nil
+	}
+	var expositor exegete.Expositor
+	expositor, ok := b.wordDataProvider.GetWordExpositor(query.Word)
+	if !ok {
+		expositor, err = b.expositorProvider.GetWordExpositor("en", query.Word)
+		if err != nil {
+			return err
+		}
+		b.wordDataProvider.SetWordExpositor(query.Word, expositor)
+	}
+	msg := renderMessageCard(query, expositor)
+	editText := tgbotapi.NewEditMessageText(
+		u.CallbackQuery.Message.Chat.ID,
+		u.CallbackQuery.Message.MessageID,
+		msg.Text,
+	)
+	editText.ParseMode = "Markdown"
+	editMarkup := tgbotapi.NewEditMessageReplyMarkup(
+		u.CallbackQuery.Message.Chat.ID,
+		u.CallbackQuery.Message.MessageID,
+		msg.ReplyMarkup.(tgbotapi.InlineKeyboardMarkup),
+	)
+	_, err = b.botAPI.Send(editText)
+	if err != nil {
+		return err
+	}
+	_, err = b.botAPI.Send(editMarkup)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // 		audio, err := expositor.GetAudio()
@@ -130,11 +186,42 @@ func (b *Bot) replyWordNotFound(u *tgbotapi.Update, word string) {
 // 			log.Printf("Error while answering to user! %s\n", err)
 // 		}
 
-func StartButtonRow() []tgbotapi.InlineKeyboardButton {
-	row := tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("⬅️", "dummy"),
-		tgbotapi.NewInlineKeyboardButtonData("➡️", "dummy"),
-		tgbotapi.NewInlineKeyboardButtonData("🔈", "dummy"),
-	)
-	return row
+func renderMessageCard(curQuery *ButtonData, expositor exegete.Expositor) tgbotapi.MessageConfig {
+	senses := expositor.GetSenses()
+	transc, _ := expositor.GetSpelling()
+	card := Card{
+		Word:          expositor.Word(),
+		Transcription: transc,
+		Definitions:   senses[curQuery.Next-1].GetDefinitions(),
+		Page:          curQuery.Next,
+		Total:         len(senses),
+	}
+	t := template.Must(template.New("card").Parse(CardTemplate))
+	var out bytes.Buffer
+	t.Execute(&out, card)
+	msg := tgbotapi.NewMessage(0, out.String())
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = renderButtonsRow(card, expositor.Word())
+	return msg
+}
+
+func renderButtonsRow(card Card, word string) tgbotapi.InlineKeyboardMarkup {
+	buttons := make([]tgbotapi.InlineKeyboardButton, 0, 3)
+	if card.Page != 1 {
+		data := ButtonData{Word: word, Next: card.Page - 1}
+		bytes, _ := data.MarshalJSON()
+		log.Println(string(bytes))
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("⬅️", string(bytes)))
+	}
+	if card.Page != card.Total {
+		data := ButtonData{Word: word, Next: card.Page + 1}
+		bytes, _ := data.MarshalJSON()
+		log.Println(string(bytes))
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("➡️", string(bytes)))
+	}
+	data := ButtonData{Word: word, AuidoAsked: true}
+	bytes, _ := data.MarshalJSON()
+	log.Println(string(bytes))
+	buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("🔈", string(bytes)))
+	return tgbotapi.NewInlineKeyboardMarkup(buttons)
 }

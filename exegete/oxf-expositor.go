@@ -14,6 +14,7 @@ type OxfExpositorProvider struct {
 type OxfExpositor struct {
 	*oxf.LexicalEntry
 	client *http.Client
+	word   string
 }
 
 type OxfSense struct {
@@ -31,14 +32,19 @@ func (oep *OxfExpositorProvider) GetWordExpositor(lang, word string) (Expositor,
 	if err != nil {
 		return nil, fmt.Errorf("Getting oxford entry error: %s ", err)
 	}
-	return NewOxfExpositor(&entry.Results[0].LexicalEntries[0]), nil
+	return NewOxfExpositor(&entry.Results[0].LexicalEntries[0], word), nil
 }
 
-func NewOxfExpositor(lex *oxf.LexicalEntry) Expositor {
+func NewOxfExpositor(lex *oxf.LexicalEntry, word string) Expositor {
 	return &OxfExpositor{
 		lex,
 		&http.Client{},
+		word,
 	}
+}
+
+func (oe *OxfExpositor) Word() string {
+	return oe.word
 }
 
 func (oe *OxfExpositor) GetAudio() (io.ReadCloser, error) {

@@ -7,6 +7,7 @@ type ExpositorProvider interface {
 }
 
 type Expositor interface {
+	Word() string
 	GetAudio() (io.ReadCloser, error)
 	GetSpelling() (string, error)
 	GetSenses() []Sense

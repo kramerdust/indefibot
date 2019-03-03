@@ -4,10 +4,12 @@ type Card struct {
 	Word          string
 	Transcription string
 	Page          int
-	Definition    string
+	Total         int
+	Definitions   []string
 }
 
 const CardTemplate = `
 *{{.Word}}*  
-_{{.Transcription}}_  
-*{{.Page}}*: {{.Definition}}`
+_[{{.Transcription}}]_  
+{{range .Definitions}}- {{.}}  
+{{end}}({{.Page}}/{{.Total}})`

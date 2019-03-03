@@ -5,7 +5,7 @@ import (
 )
 
 type WordDataProvider interface {
-	SetWordExpositor(userID string, expositor exegete.Expositor)
+	SetWordExpositor(word string, expositor exegete.Expositor)
 	GetWordExpositor(word string) (exegete.Expositor, bool)
 	SetAudioID(word string, ID string)
 	GetAudioID(ID string) (string, bool)
