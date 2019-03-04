@@ -8,7 +8,7 @@ type WordDataProvider interface {
 	SetWordExpositor(word string, expositor exegete.Expositor)
 	GetWordExpositor(word string) (exegete.Expositor, bool)
 	SetAudioID(word string, ID string)
-	GetAudioID(ID string) (string, bool)
+	GetAudioID(word string) (string, bool)
 }
 
 type WordMap map[string]*wordEntry
@@ -50,7 +50,7 @@ func (wm WordMap) SetAudioID(word string, ID string) {
 func (wm WordMap) GetAudioID(word string) (string, bool) {
 	we, ok := wm[word]
 	if ok {
-		return we.audioID, ok
+		return we.audioID, we.audioID != ""
 	}
 	return "", ok
 }

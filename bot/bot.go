@@ -101,19 +101,16 @@ func (b *Bot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 			msg.ReplyMarkup = renderButtonsRow(card, word)
 			msg.ParseMode = "Markdown"
 
-			// log.Printf("%#v\n", msg.ReplyMarkup)
-			// log.Println(msg.Text)
-
 			s, err := b.botAPI.Send(msg)
 			if err != nil {
-				b.replyError(&u, err)
+				b.replyError(u.Message.Chat.ID, u.Message.MessageID, err)
 				log.Println("Error in message", s, err)
 			}
 
 		case u.CallbackQuery != nil:
 			err := b.handleCallbackQuery(&u)
 			if err != nil {
-				b.replyError(&u, err)
+				b.replyError(u.CallbackQuery.Message.Chat.ID, u.CallbackQuery.Message.MessageID, err)
 			}
 			log.Println("CallbackQuery")
 		}
@@ -127,9 +124,9 @@ func (b *Bot) replyWordNotFound(u *tgbotapi.Update, word string) {
 	b.botAPI.Send(msg)
 }
 
-func (b *Bot) replyError(u *tgbotapi.Update, err error) {
-	msg := tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Some error happened! *%s*", err))
-	msg.ReplyToMessageID = u.Message.MessageID
+func (b *Bot) replyError(chatID int64, messageID int, err error) {
+	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Some error happened! *%s*", err))
+	msg.ReplyToMessageID = messageID
 	msg.ParseMode = "Markdown"
 	b.botAPI.Send(msg)
 }
@@ -140,9 +137,7 @@ func (b *Bot) handleCallbackQuery(u *tgbotapi.Update) error {
 	if err != nil {
 		return err
 	}
-	if query.AuidoAsked {
-		return nil
-	}
+
 	var expositor exegete.Expositor
 	expositor, ok := b.wordDataProvider.GetWordExpositor(query.Word)
 	if !ok {
@@ -151,6 +146,10 @@ func (b *Bot) handleCallbackQuery(u *tgbotapi.Update) error {
 			return err
 		}
 		b.wordDataProvider.SetWordExpositor(query.Word, expositor)
+	}
+	if query.AuidoAsked {
+		err = b.handleAudioQuery(expositor, u)
+		return err
 	}
 	msg := renderMessageCard(query, expositor)
 	editText := tgbotapi.NewEditMessageText(
@@ -175,20 +174,36 @@ func (b *Bot) handleCallbackQuery(u *tgbotapi.Update) error {
 	return nil
 }
 
-// 		audio, err := expositor.GetAudio()
-// 		msg := tgbotapi.NewAudioUpload(u.Message.Chat.ID, tgbotapi.FileReader{
-// 			word,
-// 			audio,
-// 			-1,
-// 		})
-// 		_, err = b.botAPI.Send(msg)
-// 		if err != nil {
-// 			log.Printf("Error while answering to user! %s\n", err)
-// 		}
+func (b *Bot) handleAudioQuery(expositor exegete.Expositor, u *tgbotapi.Update) error {
+	ID, ok := b.wordDataProvider.GetAudioID(expositor.Word())
+	log.Printf("HandleAudioQuery: isFilePresent %v\n", ok)
+	if !ok {
+		audio, err := expositor.GetAudio()
+		if err != nil {
+			return err
+		}
+		msg := tgbotapi.NewAudioUpload(u.CallbackQuery.Message.Chat.ID, tgbotapi.FileReader{
+			Name:   expositor.Word(),
+			Reader: audio,
+			Size:   -1,
+		})
+		response, err := b.botAPI.Send(msg)
+		if err != nil {
+			return err
+		}
+		b.wordDataProvider.SetAudioID(expositor.Word(), response.Audio.FileID)
+		return nil
+	}
+
+	msg := tgbotapi.NewAudioShare(u.CallbackQuery.Message.Chat.ID, ID)
+	_, err := b.botAPI.Send(msg)
+	return err
+}
 
 func renderMessageCard(curQuery *ButtonData, expositor exegete.Expositor) tgbotapi.MessageConfig {
 	senses := expositor.GetSenses()
 	transc, _ := expositor.GetSpelling()
+	log.Println(senses[curQuery.Next-1].GetDefinitions())
 	card := Card{
 		Word:          expositor.Word(),
 		Transcription: transc,
@@ -210,18 +225,15 @@ func renderButtonsRow(card Card, word string) tgbotapi.InlineKeyboardMarkup {
 	if card.Page != 1 {
 		data := ButtonData{Word: word, Next: card.Page - 1}
 		bytes, _ := data.MarshalJSON()
-		log.Println(string(bytes))
 		buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("⬅️", string(bytes)))
 	}
 	if card.Page != card.Total {
 		data := ButtonData{Word: word, Next: card.Page + 1}
 		bytes, _ := data.MarshalJSON()
-		log.Println(string(bytes))
 		buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("➡️", string(bytes)))
 	}
 	data := ButtonData{Word: word, AuidoAsked: true}
 	bytes, _ := data.MarshalJSON()
-	log.Println(string(bytes))
 	buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("🔈", string(bytes)))
 	return tgbotapi.NewInlineKeyboardMarkup(buttons)
 }
