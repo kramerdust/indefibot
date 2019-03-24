@@ -63,6 +63,7 @@ func (b *Bot) Start() {
 	if err != nil {
 		panic(err)
 	}
+	updates.Clear()
 	b.handleUpdates(updates)
 }
 
