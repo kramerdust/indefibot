@@ -67,6 +67,12 @@ func (b *Bot) Start() {
 	b.handleUpdates(updates)
 }
 
+func (b *Bot) StartWebHook() {
+	updates := b.botAPI.ListenForWebhook("/" + b.botAPI.Token)
+	updates.Clear()
+	b.handleUpdates(updates)
+}
+
 func (b *Bot) handleUpdates(updates tgbotapi.UpdatesChannel) {
 	for u := range updates {
 		switch {

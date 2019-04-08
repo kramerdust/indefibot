@@ -15,6 +15,8 @@ import (
 
 func main() {
 	proxyFlag := flag.Bool("proxy", false, "Use proxy")
+	webHookFlag := flag.Bool("w", true, "Start as webhook")
+
 	flag.Parse()
 
 	log.SetOutput(os.Stdout)
@@ -37,7 +39,11 @@ func main() {
 	provider := ex.NewOxfExpositorProvider(config.Source.AppID, config.Source.AppKey)
 	myBot.SetExpositorProvider(provider)
 
-	go myBot.Start()
+	if *webHookFlag {
+		go myBot.StartWebHook()
+	} else {
+		go myBot.Start()
+	}
 
 	fmt.Println("Press enter to stop")
 	fmt.Scanln()
